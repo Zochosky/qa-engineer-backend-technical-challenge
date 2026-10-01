@@ -23,9 +23,10 @@ test('Count open non-draft pull requests across all GitHub pages', async ({ requ
   });
 
   const count = countOpenNonDraftPullRequests(pullRequests);
-  await test.step(`Count open non-draft pull requests: ${count}`, async () => {
+  const draftCount = pullRequests.filter((pullRequest) => pullRequest.draft).length;
+  const summary = `Count open non-draft PRs: ${count} (${pullRequests.length} fetched, ${draftCount} drafts)`;
+  await test.step(summary, async () => {
     // All records were verified as open, so only drafts should be excluded.
-    const draftCount = pullRequests.filter((pullRequest) => pullRequest.draft).length;
     expect(count, 'The total must exclude every draft pull request')
       .toBe(pullRequests.length - draftCount);
   });

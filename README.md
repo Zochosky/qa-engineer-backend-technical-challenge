@@ -32,7 +32,7 @@ Generated reports are ignored by Git.
 
 TypeScript provides static checks, Playwright Test runs the API test and generates reports, and Zod validates external data at runtime. No browser installation is needed.
 
-- `src/api/githubClient.ts` handles HTTP requests and pagination, returning validated data only after all pages succeed. It accepts the repository owner and name so it can be reused for other GitHub repositories.
+- `src/api/githubClient.ts` separates fetching and validating a single page from following pagination links and checking for duplicates. It returns data only after all pages succeed and accepts the repository owner and name for reuse.
 - `src/schemas/pullRequest.schema.ts` defines the fields needed for counting and derives the TypeScript type from the same schema to avoid maintaining two separate definitions.
 - `src/domain/pullRequests.ts` counts only open, non-draft PRs. This pure function is independent of HTTP and reporting and does not modify its input.
 - `tests/integration/github.spec.ts` defines the live scenario, assertions and report steps. Reporting stays in the test rather than the API client.
@@ -45,9 +45,11 @@ The client requests `state=open` with up to 100 PRs per page and follows `rel="n
 
 Every page must return HTTP 200 and valid JSON. Zod checks a positive integer `id`, a `state` of `open` or `closed`, and a boolean `draft`. The test separately verifies that the `state=open` filter was respected. Values are not normalized; for example, `OPEN` does not satisfy the schema.
 
-After fetching, the business rule counts PRs with `state === 'open'` and `draft === false`. The result appears in the report's counting step. Since the test has verified that all records are open, it checks that the count equals the number fetched minus the number of drafts. This consistency check uses the same dataset; it is not an independent source of the repository's total.
+After fetching, the business rule counts PRs with `state === 'open'` and `draft === false`. The report's counting step shows the result, total fetched and drafts excluded. Since the test has verified that all records are open, it checks that the count equals the number fetched minus the number of drafts. This consistency check uses the same dataset; it is not an independent source of the repository's total.
 
 Request failures, invalid responses, repeated page URLs and duplicate PR IDs stop the operation instead of producing a partial or potentially misleading result. Duplicate detection covers both a single page and different pages. Errors include the page and request URL; duplicate errors identify both occurrences' pages.
+
+For HTTP 403 or 429, errors also include available rate-limit and retry headers, with the reset timestamp translated to UTC. A 403 is not automatically classified as a rate-limit failure, and no automatic retry is performed.
 
 ## Assumptions and limitations
 

@@ -16,6 +16,56 @@ function getNextPage(linkHeader: string | undefined, context: string): string | 
   return nextPage;
 }
 
+async function fetchValidatedPage(
+  request: Pick<APIRequestContext, 'get'>,
+  url: string,
+  pageNumber: number,
+) {
+  const context = `Page ${pageNumber}, GET ${url}`;
+  const response = await request.get(url, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2026-03-10',
+    },
+    timeout: 15_000,
+  }).catch((cause: unknown) => {
+    const reason = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(`${context}: request failed: ${reason}`, { cause });
+  });
+  if (response.status() !== 200) {
+    const details: string[] = [];
+    // A 403 can also mean a permission error; report headers without assuming the cause.
+    if (response.status() === 403 || response.status() === 429) {
+      const headers = response.headers();
+      for (const name of ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after']) {
+        if (headers[name] !== undefined) details.push(`${name}=${headers[name]}`);
+      }
+      const reset = headers['x-ratelimit-reset'];
+      if (reset && /^\d+$/.test(reset)) {
+        const resetDate = new Date(Number(reset) * 1000);
+        if (Number.isFinite(resetDate.getTime())) details.push(`reset time=${resetDate.toISOString()}`);
+      }
+    }
+    throw new Error(
+      `${context}: expected HTTP 200, received ${response.status()} ${response.statusText()}` +
+      (details.length ? `; ${details.join('; ')}` : ''),
+    );
+  }
+
+  const body: unknown = await response.json().catch((cause: unknown) => {
+    throw new Error(`${context}: response is not valid JSON`, { cause });
+  });
+  const validation = pullRequestsSchema.safeParse(body);
+  if (!validation.success) {
+    throw new Error(`${context}: invalid pull request response\n${validation.error.message}`);
+  }
+
+  return {
+    pullRequests: validation.data,
+    nextUrl: getNextPage(response.headers().link, context),
+  };
+}
+
 export async function getAllOpenPullRequests(
   request: Pick<APIRequestContext, 'get'>,
   owner: string,
@@ -47,31 +97,9 @@ export async function getAllOpenPullRequests(
     if (visitedPages.has(url)) throw new Error(`${context}: repeated pagination URL`);
     visitedPages.add(url);
 
-    const response = await request.get(url, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2026-03-10',
-      },
-      timeout: 15_000,
-    }).catch((cause: unknown) => {
-      const reason = cause instanceof Error ? cause.message : String(cause);
-      throw new Error(`${context}: request failed: ${reason}`, { cause });
-    });
-    if (response.status() !== 200) {
-      throw new Error(
-        `${context}: expected HTTP 200, received ${response.status()} ${response.statusText()}`,
-      );
-    }
+    const page = await fetchValidatedPage(request, url, pageNumber);
 
-    const body: unknown = await response.json().catch((cause: unknown) => {
-      throw new Error(`${context}: response is not valid JSON`, { cause });
-    });
-    const validation = pullRequestsSchema.safeParse(body);
-    if (!validation.success) {
-      throw new Error(`${context}: invalid pull request response\n${validation.error.message}`);
-    }
-
-    for (const pullRequest of validation.data) {
+    for (const pullRequest of page.pullRequests) {
       const firstPage = firstPageById.get(pullRequest.id);
       // Silently removing duplicates could hide pagination drift and an incomplete dataset.
       if (firstPage !== undefined) {
@@ -84,7 +112,7 @@ export async function getAllOpenPullRequests(
       pullRequests.push(pullRequest);
     }
     // Only Link determines whether another page exists, not the number of records.
-    nextUrl = getNextPage(response.headers().link, context);
+    nextUrl = page.nextUrl;
   }
 
   // Return only after every page succeeds; a partial list would produce a misleading count.
