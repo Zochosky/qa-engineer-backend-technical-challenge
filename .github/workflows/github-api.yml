@@ -1,4 +1,4 @@
-name: GitHub API check
+name: PR MONITOR
 
 on:
   workflow_dispatch:

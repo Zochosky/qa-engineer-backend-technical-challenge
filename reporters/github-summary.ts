@@ -24,10 +24,10 @@ export default class GitHubSummary implements Reporter {
     try {
       const test = tests[0];
       if (tests.length !== 1 || !test) throw new Error('Expected one GitHub API test');
-      const header = `## GitHub API test\n\nRepository: appwrite/appwrite\n\nRun started: ${run.startTime.toISOString()}\n\n`;
+      const context = `Repository: appwrite/appwrite\n\nRun started: ${run.startTime.toISOString()}\n\n`;
       // Do not present partial or failed observations as a valid PR count.
       if (run.status !== 'passed' || test.results.at(-1)?.status !== 'passed' || test.outcome() !== 'expected') {
-        appendFileSync(summaryPath, header + 'No confirmed counts: the run did not pass cleanly. See the test logs and HTML report.\n');
+        appendFileSync(summaryPath, '## PR MONITOR\n\n' + context + 'No confirmed counts: the run did not pass cleanly. See the test logs and HTML report.\n');
         return;
       }
       const annotations = test.annotations.filter((item) => item.type === '_pr-counts');
@@ -35,7 +35,8 @@ export default class GitHubSummary implements Reporter {
         throw new Error('Missing or ambiguous PR count data');
       }
       const counts = countsSchema.parse(JSON.parse(annotations[0].description));
-      appendFileSync(summaryPath, header + [
+      const header = `## PR MONITOR — Open: ${counts.fetched} | Drafts: ${counts.drafts} | Non-draft: ${counts.nonDrafts}\n\n`;
+      appendFileSync(summaryPath, header + context + [
         '**Test passed.**',
         '',
         '| Metric | Count |',

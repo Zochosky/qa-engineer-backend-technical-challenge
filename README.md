@@ -30,7 +30,7 @@ Generated reports are ignored by Git.
 
 ## GitHub Actions
 
-The `GitHub API check` workflow supports manual runs from the Actions tab once published on the default branch. The optional 30-minute schedule is commented out and inactive.
+The `PR MONITOR` workflow supports manual runs from the Actions tab once published on the default branch. The optional 30-minute schedule is commented out and inactive.
 
 The workflow installs Node.js from `.nvmrc`, checks types, runs the live GitHub test, and saves its HTML report for 7 days. API requests use the automatic workflow token; no personal token is required. Local runs remain unauthenticated unless `GITHUB_API_TOKEN` is set.
 
