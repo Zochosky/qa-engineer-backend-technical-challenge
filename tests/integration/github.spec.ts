@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { getAllOpenPullRequests } from '../../src/api/githubClient';
+import { countOpenNonDraftPullRequests } from '../../src/domain/pullRequests';
 
-test('GitHub returns valid open pull requests across all pages', async ({ request }) => {
+test('Count open non-draft pull requests across all GitHub pages', async ({ request }) => {
   test.setTimeout(120_000);
 
   const pullRequests = await test.step('Fetch and validate all pages', async () => {
@@ -19,5 +20,13 @@ test('GitHub returns valid open pull requests across all pages', async ({ reques
       nonOpenPullRequests,
       'The state=open request must not return closed pull requests',
     ).toEqual([]);
+  });
+
+  const count = countOpenNonDraftPullRequests(pullRequests);
+  await test.step(`Count open non-draft pull requests: ${count}`, async () => {
+    // All records were verified as open, so only drafts should be excluded.
+    const draftCount = pullRequests.filter((pullRequest) => pullRequest.draft).length;
+    expect(count, 'The total must exclude every draft pull request')
+      .toBe(pullRequests.length - draftCount);
   });
 });
