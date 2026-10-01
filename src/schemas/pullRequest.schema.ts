@@ -7,3 +7,5 @@ export const pullRequestSchema = z.object({
 });
 
 export const pullRequestsSchema = z.array(pullRequestSchema);
+
+export type PullRequest = z.infer<typeof pullRequestSchema>;

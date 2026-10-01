@@ -1,20 +1,16 @@
 import { expect, test } from '@playwright/test';
-import { getOpenPullRequestsPage } from '../../src/api/githubClient';
-import { pullRequestsSchema } from '../../src/schemas/pullRequest.schema';
+import { getAllOpenPullRequests } from '../../src/api/githubClient';
 
-test('GitHub returns a valid first page of open pull requests', async ({ request }) => {
-  const body = await test.step('Fetch the first page of open pull requests', async () => {
-    return getOpenPullRequestsPage(request, 'appwrite', 'appwrite');
-  });
+test('GitHub returns valid open pull requests across all pages', async ({ request }) => {
+  test.setTimeout(120_000);
 
-  const pullRequests = await test.step('Validate the response schema', async () => {
-    const validation = pullRequestsSchema.safeParse(body);
-
-    if (!validation.success) {
-      throw new Error(`Invalid GitHub pull request response:\n${validation.error.message}`);
-    }
-
-    return validation.data;
+  const pullRequests = await test.step('Fetch and validate all pages', async () => {
+    return getAllOpenPullRequests({
+      get: (url, options) => test.step(
+        `Fetch page ${new URL(url).searchParams.get('page')}`,
+        () => request.get(url, options),
+      ),
+    }, 'appwrite', 'appwrite');
   });
 
   await test.step('Verify that all returned pull requests are open', async () => {
@@ -24,5 +20,4 @@ test('GitHub returns a valid first page of open pull requests', async ({ request
       'The state=open request must not return closed pull requests',
     ).toEqual([]);
   });
-
 });
