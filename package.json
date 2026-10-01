@@ -1,0 +1,19 @@
+{
+  "name": "qa-engineer-backend-technical-challenge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Backend QA challenge covering GitHub pull requests and middleware validation.",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.13.6",
+    "typescript": "7.0.2",
+    "zod": "4.6.5"
+  }
+}
