@@ -26,6 +26,9 @@ async function fetchValidatedPage(
     headers: {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2026-03-10',
+      ...(process.env.GITHUB_API_TOKEN
+        ? { Authorization: `Bearer ${process.env.GITHUB_API_TOKEN}` }
+        : {}),
     },
     timeout: 15_000,
   }).catch((cause: unknown) => {

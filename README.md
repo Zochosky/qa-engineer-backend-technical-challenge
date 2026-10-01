@@ -28,6 +28,14 @@ npm run report
 
 Generated reports are ignored by Git.
 
+## GitHub Actions
+
+The `GitHub API check` workflow supports manual runs from the Actions tab once published on the default branch. The optional 30-minute schedule is commented out and inactive.
+
+The workflow installs Node.js from `.nvmrc`, checks types, runs the live GitHub test, and saves its HTML report for 7 days. API requests use the automatic workflow token; no personal token is required. Local runs remain unauthenticated unless `GITHUB_API_TOKEN` is set.
+
+Each run records its current counts in the HTML report. Results are not automatically compared between runs; a change in PR counts is not a test failure.
+
 ## Architecture
 
 TypeScript provides static checks, Playwright Test runs the API test and generates reports, and Zod validates external data at runtime. No browser installation is needed.
@@ -57,9 +65,9 @@ For HTTP 403 or 429, errors also include available rate-limit and retry headers,
 - Validation covers fields needed by the business rule, not the entire GitHub response. Additional fields are accepted and omitted from the parsed result.
 - The Link parser currently supports the format used in GitHub's pagination examples; it is not a general-purpose parser for every valid Link header variant.
 - GitHub data can change between requests. Following all pages does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
-- The test requires internet access and uses unauthenticated requests, so GitHub availability and API rate limits can cause failures. Requests have a 15-second timeout; the test has a 120-second timeout. No automatic retries are configured.
+- The test requires internet access. GitHub availability and API rate limits can cause failures, even with the optional token. Requests have a 15-second timeout; the test has a 120-second timeout. No automatic retries are configured.
 - The current suite contains one live integration test. It does not reproducibly exercise every error-handling branch.
 
 ## Current scope
 
-Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. Part 2 (middleware business rules) and GitHub Actions are pending.
+Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. A manual GitHub Actions workflow is prepared; scheduled execution is disabled. Part 2 (middleware business rules) is pending.
