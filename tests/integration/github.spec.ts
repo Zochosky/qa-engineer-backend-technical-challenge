@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { getAllOpenPullRequests } from '../../src/api/githubClient';
 import { countOpenNonDraftPullRequests } from '../../src/domain/pullRequests';
 
-test('Count open non-draft pull requests across all GitHub pages', async ({ request }) => {
+test('Count open non-draft pull requests across all GitHub pages', { tag: '@github-api' }, async ({ request }, testInfo) => {
   test.setTimeout(120_000);
 
   const pullRequests = await test.step('Fetch and validate all pages', async () => {
@@ -29,5 +29,11 @@ test('Count open non-draft pull requests across all GitHub pages', async ({ requ
     // All records were verified as open, so only drafts should be excluded.
     expect(count, 'The total must exclude every draft pull request')
       .toBe(pullRequests.length - draftCount);
+  });
+
+  // The reporter renders these counters after the run, without parsing step titles.
+  testInfo.annotations.push({
+    type: '_pr-counts',
+    description: JSON.stringify({ fetched: pullRequests.length, drafts: draftCount, nonDrafts: count }),
   });
 });

@@ -34,7 +34,9 @@ The `GitHub API check` workflow supports manual runs from the Actions tab once p
 
 The workflow installs Node.js from `.nvmrc`, checks types, runs the live GitHub test, and saves its HTML report for 7 days. API requests use the automatic workflow token; no personal token is required. Local runs remain unauthenticated unless `GITHUB_API_TOKEN` is set.
 
-Each run records its current counts in the HTML report. Results are not automatically compared between runs; a change in PR counts is not a test failure.
+After the tests finish, `reporters/github-summary.ts` displays the current counts directly in the Actions run summary through `GITHUB_STEP_SUMMARY`. The test supplies structured counters in an annotation; no extra API requests or step-title parsing are needed. Failed runs do not publish counts as confirmed results. A summary-writing error fails the run. Locally, the reporter does nothing unless `GITHUB_STEP_SUMMARY` is set.
+
+The HTML report still contains detailed steps and counts. Results are not automatically compared between runs; a change in PR counts is not a test failure.
 
 ## Architecture
 
