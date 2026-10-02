@@ -46,6 +46,10 @@ After the tests finish, `reporters/github-summary.ts` displays the current count
 
 The HTML report still contains detailed steps and counts. Results are not automatically compared between runs; a change in PR counts is not a test failure.
 
+The `UNIT TESTS` workflow runs on pushes to `main`, pull requests targeting `main`, and manual dispatch. It uses Node.js from `.nvmrc`, installs dependencies with `npm ci`, checks types, and runs `npm test -- tests/unit`. Tests do not call GitHub's API or require an API token.
+
+The unit test job has a 5-minute timeout. A newer run cancels an earlier run for the same branch or pull request. Generated HTML reports are saved as the `unit-test-report` artifact for 7 days, including after test failures; cancelled runs skip the upload.
+
 ## Architecture
 
 TypeScript provides static checks, Playwright Test runs the tests and generates reports, and Zod validates external data at runtime. No browser installation is needed.
@@ -99,5 +103,3 @@ The seven tests in `tests/unit/middleware.spec.ts` use the supplied fixture and 
 | Empty response | Empty array; declared count `0` | Accept |
 
 Negative cases pass only when the validator throws the expected error message. Together, the cases cover both directions of count mismatch and all four combinations of high-priority label presence and draft status.
-
-A dedicated CI workflow for Part 2 is pending.
