@@ -35,7 +35,7 @@ export default class GitHubSummary implements Reporter {
         throw new Error('Missing or ambiguous PR count data');
       }
       const counts = countsSchema.parse(JSON.parse(annotations[0].description));
-      const header = `## PR MONITOR — Open: ${counts.fetched} | Drafts: ${counts.drafts} | Non-draft: ${counts.nonDrafts}\n\n`;
+      const header = `## PR MONITOR - Open: ${counts.fetched} | Drafts: ${counts.drafts} | Non-draft: ${counts.nonDrafts}\n\n`;
       appendFileSync(summaryPath, header + context + [
         '**Test passed.**',
         '',

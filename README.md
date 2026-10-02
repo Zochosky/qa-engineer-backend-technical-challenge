@@ -14,10 +14,16 @@ npm ci
 npm run typecheck
 ```
 
-## Run the test
+## Run the tests
 
 ```sh
 npm test
+```
+
+To run only the middleware tests, without calling GitHub:
+
+```sh
+npm test -- tests/unit/middleware.spec.ts
 ```
 
 After the test run finishes, Playwright generates an HTML report in `playwright-report/` with results, steps, timings and failure details. Open the latest report with:
@@ -42,7 +48,7 @@ The HTML report still contains detailed steps and counts. Results are not automa
 
 ## Architecture
 
-TypeScript provides static checks, Playwright Test runs the API test and generates reports, and Zod validates external data at runtime. No browser installation is needed.
+TypeScript provides static checks, Playwright Test runs the tests and generates reports, and Zod validates external data at runtime. No browser installation is needed.
 
 - `src/api/githubClient.ts` separates fetching and validating a single page from following pagination links and checking for duplicates. It returns data only after all pages succeed and accepts the repository owner and name for reuse.
 - `src/schemas/pullRequest.schema.ts` defines the fields needed for counting and derives the TypeScript type from the same schema to avoid maintaining two separate definitions.
@@ -76,4 +82,6 @@ For HTTP 403 or 429, errors also include available rate-limit and retry headers,
 
 Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. GitHub Actions supports hourly and manual execution.
 
-Part 2 validates the supplied middleware fixture with Zod, then checks the declared count and the high-priority draft rule in `src/domain/middlewareRules.ts`. The count covers the entire array, as specified in Part 2; Part 1 filtering is not applied. The function reports the first violation with declared/actual counts or the offending PR ID. The provided example is covered; additional scenarios and a dedicated CI workflow are pending.
+Part 2 validates the supplied middleware fixture with Zod, then checks the declared count and the high-priority draft rule in `src/domain/middlewareRules.ts`. The count covers the entire array, as specified in Part 2; Part 1 filtering is not applied. The function reports the first violation with declared/actual counts or the offending PR ID.
+
+Five local cases cover the provided example, a count mismatch, a high-priority draft, a draft without high-priority, and an empty list. A dedicated CI workflow is pending.
