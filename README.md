@@ -74,4 +74,6 @@ For HTTP 403 or 429, errors also include available rate-limit and retry headers,
 
 ## Current scope
 
-Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. GitHub Actions supports hourly and manual execution. Part 2 (middleware business rules) is pending.
+Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. GitHub Actions supports hourly and manual execution.
+
+Part 2 validates the supplied middleware fixture with Zod, then checks the declared count and the high-priority draft rule in `src/domain/middlewareRules.ts`. The count covers the entire array, as specified in Part 2; Part 1 filtering is not applied. The function reports the first violation with declared/actual counts or the offending PR ID. The provided example is covered; additional scenarios and a dedicated CI workflow are pending.
