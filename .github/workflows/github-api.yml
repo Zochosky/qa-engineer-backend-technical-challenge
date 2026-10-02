@@ -2,9 +2,9 @@ name: PR MONITOR
 
 on:
   workflow_dispatch:
-  # Enable only after reviewing the manual runs and Actions usage.
-  # schedule:
-  #   - cron: '17,47 * * * *'
+  schedule:
+    # Run hourly, away from the busier start of the hour on GitHub Actions.
+    - cron: '17 * * * *'
 
 permissions:
   contents: read

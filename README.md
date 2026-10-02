@@ -30,7 +30,9 @@ Generated reports are ignored by Git.
 
 ## GitHub Actions
 
-The `PR MONITOR` workflow supports manual runs from the Actions tab once published on the default branch. The optional 30-minute schedule is commented out and inactive.
+The `PR MONITOR` workflow runs every hour at minute 17 (UTC), every day, on the default branch. Manual runs remain available from the Actions tab. GitHub may delay scheduled runs; the schedule is not an exact-time guarantee.
+
+To stop automatic runs while keeping manual execution, remove the `schedule` block from `.github/workflows/github-api.yml` and push the change to the default branch. To pause the entire workflow immediately, use Actions → PR MONITOR → workflow options → Disable workflow.
 
 The workflow installs Node.js from `.nvmrc`, checks types, runs the live GitHub test, and saves its HTML report for 7 days. API requests use the automatic workflow token; no personal token is required. Local runs remain unauthenticated unless `GITHUB_API_TOKEN` is set.
 
@@ -72,4 +74,4 @@ For HTTP 403 or 429, errors also include available rate-limit and retry headers,
 
 ## Current scope
 
-Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. A manual GitHub Actions workflow is prepared; scheduled execution is disabled. Part 2 (middleware business rules) is pending.
+Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. GitHub Actions supports hourly and manual execution. Part 2 (middleware business rules) is pending.
