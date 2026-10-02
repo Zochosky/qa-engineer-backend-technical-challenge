@@ -1,96 +1,58 @@
 # QA Engineer Backend Technical Challenge
 
-A backend testing exercise covering GitHub pull request counting and middleware response validation.
-
-## Requirements
-
-- Node.js 24
-- npm
+- **Part 1:** One live integration test fetches all pages of open PRs from `appwrite/appwrite`, validates the response fields and counts non-draft PRs.
+- **Part 2:** Seven unit tests validate the supplied middleware response and variations of it against the two business rules.
 
 ## Setup
 
+Requires Node.js 24 (specified in `.nvmrc`) and npm. Run commands from the repository root:
+
 ```sh
 npm ci
-npm run typecheck
 ```
 
-## Run the tests
+| Command | Purpose |
+| --- | --- |
+| `npm run typecheck` | Check TypeScript types |
+| `npm test` | Run all tests, including live GitHub API requests |
+| `npm test -- tests/unit` | Run Part 2 without external API calls |
+| `npm test -- tests/integration` | Run Part 1 against current GitHub data |
+| `npm run report` | Open the latest HTML report |
 
-```sh
-npm test
-```
-
-To run only the middleware tests, without calling GitHub:
-
-```sh
-npm test -- tests/unit/middleware.spec.ts
-```
-
-After the test run finishes, Playwright generates an HTML report in `playwright-report/` with results, steps, timings and failure details. Open the latest report with:
-
-```sh
-npm run report
-```
-
-Generated reports are ignored by Git.
-
-## GitHub Actions
-
-The `PR MONITOR` workflow runs every hour at minute 17 (UTC), every day, on the default branch. Manual runs remain available from the Actions tab. GitHub may delay scheduled runs; the schedule is not an exact-time guarantee.
-
-To stop automatic runs while keeping manual execution, remove the `schedule` block from `.github/workflows/github-api.yml` and push the change to the default branch. To pause the entire workflow immediately, use Actions → PR MONITOR → workflow options → Disable workflow.
-
-The workflow installs Node.js from `.nvmrc`, checks types, runs the live GitHub test, and saves its HTML report for 7 days. API requests use the automatic workflow token; no personal token is required. Local runs remain unauthenticated unless `GITHUB_API_TOKEN` is set.
-
-After the tests finish, `reporters/github-summary.ts` displays the current counts directly in the Actions run summary through `GITHUB_STEP_SUMMARY`. The test supplies structured counters in an annotation; no extra API requests or step-title parsing are needed. Failed runs do not publish counts as confirmed results. A summary-writing error fails the run. Locally, the reporter does nothing unless `GITHUB_STEP_SUMMARY` is set.
-
-The HTML report still contains detailed steps and counts. Results are not automatically compared between runs; a change in PR counts is not a test failure.
-
-The `UNIT TESTS` workflow runs on pushes to `main`, pull requests targeting `main`, and manual dispatch. It uses Node.js from `.nvmrc`, installs dependencies with `npm ci`, checks types, and runs `npm test -- tests/unit`. Tests do not call GitHub's API or require an API token.
-
-The unit test job has a 5-minute timeout. A newer run cancels an earlier run for the same branch or pull request. Generated HTML reports are saved as the `unit-test-report` artifact for 7 days, including after test failures; cancelled runs skip the upload.
+No browser installation is needed. Live API requests are unauthenticated unless `GITHUB_API_TOKEN` is set.
 
 ## Architecture
 
-TypeScript provides static checks, Playwright Test runs the tests and generates reports, and Zod validates external data at runtime. No browser installation is needed.
+Playwright provides HTTP requests and one test runner with shared reporting for both parts. TypeScript checks types during development; Zod validates input data at runtime and supplies inferred types.
 
-- `src/api/githubClient.ts` separates fetching and validating a single page from following pagination links and checking for duplicates. It returns data only after all pages succeed and accepts the repository owner and name for reuse.
-- `src/schemas/pullRequest.schema.ts` defines the fields needed for counting and derives the TypeScript type from the same schema to avoid maintaining two separate definitions.
-- `src/domain/pullRequests.ts` counts only open, non-draft PRs. This pure function is independent of HTTP and reporting and does not modify its input.
-- `tests/integration/github.spec.ts` defines the live scenario, assertions and report steps. Reporting stays in the test rather than the API client.
+- `src/api/`: GitHub requests, page validation, pagination and duplicate detection.
+- `src/schemas/`: Fields required by the GitHub and middleware validation rules.
+- `src/domain/`: PR counting and middleware rules as pure functions, independent of HTTP and reporting.
+- `tests/integration/` and `tests/unit/`: Scenarios and assertions. `tests/fixtures/` contains the middleware example from the challenge.
+- `reporters/`: GitHub Actions count summary, generated after tests finish.
 
-This separation allows request handling, validation rules and test expectations to change independently.
+## Pagination and business rules
 
-## Pagination and validation
+### Part 1
 
-The client requests `state=open` with up to 100 PRs per page and follows `rel="next"` in GitHub's `Link` header until it is absent. It does not infer the next page from the number of returned records.
+The client requests `state=open` with `per_page=100` and follows `rel="next"` in GitHub's `Link` header until it is absent. Only the header determines whether another page exists.
 
-Every page must return HTTP 200 and valid JSON. Zod checks a positive integer `id`, a `state` of `open` or `closed`, and a boolean `draft`. The test separately verifies that the `state=open` filter was respected. Values are not normalized; for example, `OPEN` does not satisfy the schema.
+Every page must return HTTP 200 and valid JSON. Zod validates a positive integer `id`, a `state` of `open` or `closed`, and a boolean `draft`. The test verifies that all returned PRs are open. The counting function includes only `state === 'open'` and `draft === false`.
 
-After fetching, the business rule counts PRs with `state === 'open'` and `draft === false`. The report's counting step shows the result, total fetched and drafts excluded. Since the test has verified that all records are open, it checks that the count equals the number fetched minus the number of drafts. This consistency check uses the same dataset; it is not an independent source of the repository's total.
+Invalid responses, repeated page URLs and duplicate IDs within or across pages stop the operation. Errors identify the page and URL; duplicates also identify the ID and both occurrences' pages. HTTP 403 and 429 errors include available rate-limit headers. Data is returned only after every page succeeds.
 
-Request failures, invalid responses, repeated page URLs and duplicate PR IDs stop the operation instead of producing a partial or potentially misleading result. Duplicate detection covers both a single page and different pages. Errors include the page and request URL; duplicate errors identify both occurrences' pages.
+### Part 2
 
-For HTTP 403 or 429, errors also include available rate-limit and retry headers, with the reset timestamp translated to UTC. A 403 is not automatically classified as a rate-limit failure, and no automatic retry is performed.
+After schema validation, the middleware function checks:
 
-## Assumptions and limitations
+- `pull_requests.length` equals `total_open_prs`.
+- A PR with the `high-priority` label has `is_draft === false`.
 
-- An empty list is valid. The live test does not assert a fixed number of PRs.
-- Validation covers fields needed by the business rule, not the entire GitHub response. Additional fields are accepted and omitted from the parsed result.
-- The Link parser currently supports the format used in GitHub's pagination examples; it is not a general-purpose parser for every valid Link header variant.
-- GitHub data can change between requests. Following all pages does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
-- The live GitHub test requires internet access. GitHub availability and API rate limits can cause failures, even with the optional token. Requests have a 15-second timeout; the test has a 120-second timeout. No automatic retries are configured.
-- The current suite contains one live integration test. It does not reproducibly exercise every error-handling branch.
+The count covers the entire array, including drafts. Part 1 filtering is not applied. The first violation throws an error with declared and actual counts or the offending PR ID.
 
-## Current scope
+## Middleware test coverage
 
-Part 1 fetches and validates all pages of open PRs and counts those that are not drafts. GitHub Actions supports hourly and manual execution.
-
-Part 2 validates the supplied middleware fixture with Zod, then checks the declared count and the high-priority draft rule in `src/domain/middlewareRules.ts`. The count covers the entire array, as specified in Part 2; Part 1 filtering is not applied. The function reports the first violation with declared/actual counts or the offending PR ID.
-
-### Middleware test coverage
-
-The seven tests in `tests/unit/middleware.spec.ts` use the supplied fixture and controlled variations, without calling a middleware service. Zod checks the fields used by the rules and error messages before business validation runs.
+The tests use the supplied JSON fixture and controlled variations:
 
 | Case | Input | Expected result |
 | --- | --- | --- |
@@ -103,3 +65,26 @@ The seven tests in `tests/unit/middleware.spec.ts` use the supplied fixture and 
 | Empty response | Empty array; declared count `0` | Accept |
 
 Negative cases pass only when the validator throws the expected error message. Together, the cases cover both directions of count mismatch and all four combinations of high-priority label presence and draft status.
+
+## CI and reports
+
+| Workflow | Trigger | Tests |
+| --- | --- | --- |
+| [PR MONITOR](.github/workflows/github-api.yml) | Hourly at minute 17 UTC on the default branch; manual runs | Live GitHub integration |
+| [UNIT TESTS](.github/workflows/unit-tests.yml) | Push to `main`, PR targeting `main`, manual runs | Middleware unit tests |
+
+Both workflows check types and retain generated HTML reports for 7 days, including after test failures. Cancelled runs skip the report upload. Artifacts are named `playwright-report` and `unit-test-report`, respectively.
+
+The live workflow uses GitHub's automatic token and shows open, draft and non-draft counts in the run summary after a successful run. Results are not compared between runs. Locally, `npm run report` opens the generated `playwright-report/`, which is ignored by Git.
+
+Scheduled runs may be delayed. To pause the monitor, use Actions -> PR MONITOR -> workflow options -> Disable workflow. The unit job has a 5-minute timeout and cancels superseded runs for the same branch or PR.
+
+## Assumptions and limitations
+
+- Empty arrays are valid. The live test does not expect a fixed PR count.
+- Schemas cover fields needed by the rules and diagnostics, not the complete response contracts. Additional fields are accepted and omitted from parsed results; values are not normalized.
+- The Link parser supports GitHub's documented format, not every possible Link header variant.
+- GitHub data can change between requests. Pagination does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
+- The live count assertion checks consistency within the fetched dataset; it does not independently confirm the repository's total.
+- Live tests require internet access and can fail due to availability or rate limits. Each request has a 15-second timeout and the live test a 120-second timeout. No automatic retries are configured.
+- The live test does not reproducibly exercise every API error-handling branch. Middleware tests validate the local rules using fixtures, without calling a middleware service.
