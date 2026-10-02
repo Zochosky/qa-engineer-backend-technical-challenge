@@ -75,7 +75,7 @@ For HTTP 403 or 429, errors also include available rate-limit and retry headers,
 - Validation covers fields needed by the business rule, not the entire GitHub response. Additional fields are accepted and omitted from the parsed result.
 - The Link parser currently supports the format used in GitHub's pagination examples; it is not a general-purpose parser for every valid Link header variant.
 - GitHub data can change between requests. Following all pages does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
-- The test requires internet access. GitHub availability and API rate limits can cause failures, even with the optional token. Requests have a 15-second timeout; the test has a 120-second timeout. No automatic retries are configured.
+- The live GitHub test requires internet access. GitHub availability and API rate limits can cause failures, even with the optional token. Requests have a 15-second timeout; the test has a 120-second timeout. No automatic retries are configured.
 - The current suite contains one live integration test. It does not reproducibly exercise every error-handling branch.
 
 ## Current scope
@@ -84,4 +84,20 @@ Part 1 fetches and validates all pages of open PRs and counts those that are not
 
 Part 2 validates the supplied middleware fixture with Zod, then checks the declared count and the high-priority draft rule in `src/domain/middlewareRules.ts`. The count covers the entire array, as specified in Part 2; Part 1 filtering is not applied. The function reports the first violation with declared/actual counts or the offending PR ID.
 
-Five local cases cover the provided example, a count mismatch, a high-priority draft, a draft without high-priority, and an empty list. A dedicated CI workflow is pending.
+### Middleware test coverage
+
+The seven tests in `tests/unit/middleware.spec.ts` use the supplied fixture and controlled variations, without calling a middleware service. Zod checks the fields used by the rules and error messages before business validation runs.
+
+| Case | Input | Expected result |
+| --- | --- | --- |
+| Provided PDF response | One high-priority, non-draft PR; declared count `1` | Accept |
+| Declared count too high | One PR; declared count `2` | Reject with declared and actual counts |
+| Declared count too low | One PR; declared count `0` | Reject with declared and actual counts |
+| High-priority draft | Valid first PR, then a draft with labels `["backend", "high-priority"]`; declared count `2` | Reject with the second PR's ID; checks beyond the first PR and first label |
+| Draft without high-priority | One draft with the `backend` label; declared count `1` | Accept; Part 2 allows this draft and includes it in the array count |
+| Multiple valid PRs | Two non-draft PRs, one with high-priority and one without; declared count `2` | Accept both combinations in one response |
+| Empty response | Empty array; declared count `0` | Accept |
+
+Negative cases pass only when the validator throws the expected error message. Together, the cases cover both directions of count mismatch and all four combinations of high-priority label presence and draft status.
+
+A dedicated CI workflow for Part 2 is pending.

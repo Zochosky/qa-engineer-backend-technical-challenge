@@ -13,7 +13,7 @@ test('Middleware response from the challenge satisfies the business rules', asyn
   });
 });
 
-test('Middleware response rejects a declared count that differs from the array length', () => {
+test('Middleware response rejects a declared count larger than the array length', () => {
   const response = middlewareResponseSchema.parse({
     ...middlewareResponse,
     total_open_prs: 2,
@@ -21,6 +21,17 @@ test('Middleware response rejects a declared count that differs from the array l
 
   expect(() => validateMiddlewareRules(response)).toThrow(
     new Error('total_open_prs mismatch: declared 2, actual 1'),
+  );
+});
+
+test('Middleware response rejects a declared count smaller than the array length', () => {
+  const response = middlewareResponseSchema.parse({
+    ...middlewareResponse,
+    total_open_prs: 0,
+  });
+
+  expect(() => validateMiddlewareRules(response)).toThrow(
+    new Error('total_open_prs mismatch: declared 0, actual 1'),
   );
 });
 
@@ -32,7 +43,7 @@ test('Middleware response rejects a high-priority draft after a valid PR', () =>
       ...middlewareResponse.pull_requests,
       {
         id: 1025,
-        labels: ['high-priority'],
+        labels: ['backend', 'high-priority'],
         meta: { is_draft: true },
       },
     ],
@@ -51,6 +62,23 @@ test('Middleware response accepts a draft without the high-priority label', () =
         id: 1024,
         labels: ['backend'],
         meta: { is_draft: true },
+      },
+    ],
+  });
+
+  expect(() => validateMiddlewareRules(response)).not.toThrow();
+});
+
+test('Middleware response accepts multiple valid PRs, including a non-draft without high-priority', () => {
+  const response = middlewareResponseSchema.parse({
+    ...middlewareResponse,
+    total_open_prs: 2,
+    pull_requests: [
+      ...middlewareResponse.pull_requests,
+      {
+        id: 1025,
+        labels: ['backend'],
+        meta: { is_draft: false },
       },
     ],
   });
