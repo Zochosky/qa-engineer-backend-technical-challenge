@@ -48,6 +48,49 @@ test('GitHub client rejects page two with HTTP 429 without returning partial dat
   expect(requestedUrls).toEqual([firstPageUrl, secondPageUrl]);
 });
 
+test('GitHub client rejects page two with HTTP 403 and reports rate-limit details without retrying', async () => {
+  const { request, requestedUrls } = createRequestStub([
+    {
+      body: [{ id: 101, state: 'open', draft: false }],
+      headers: { link: `<${secondPageUrl}>; rel="next"` },
+    },
+    {
+      body: { message: 'API rate limit exceeded' },
+      status: 403,
+      statusText: 'Forbidden',
+      headers: {
+        'x-ratelimit-limit': '60',
+        'x-ratelimit-remaining': '0',
+        'x-ratelimit-reset': '1700000000',
+      },
+    },
+  ]);
+
+  await expect(getAllOpenPullRequests(request, 'appwrite', 'appwrite')).rejects.toThrow(
+    new Error(
+      `Page 2, GET ${secondPageUrl}: expected HTTP 200, received 403 Forbidden; ` +
+      'x-ratelimit-limit=60; x-ratelimit-remaining=0; x-ratelimit-reset=1700000000; ' +
+      'reset time=2023-11-14T22:13:20.000Z',
+    ),
+  );
+  expect(requestedUrls).toEqual([firstPageUrl, secondPageUrl]);
+});
+
+test('GitHub client rejects HTTP 403 without inventing missing rate-limit details or retrying', async () => {
+  const { request, requestedUrls } = createRequestStub([
+    {
+      body: { message: 'Resource not accessible by integration' },
+      status: 403,
+      statusText: 'Forbidden',
+    },
+  ]);
+
+  await expect(getAllOpenPullRequests(request, 'appwrite', 'appwrite')).rejects.toThrow(
+    new Error(`Page 1, GET ${firstPageUrl}: expected HTTP 200, received 403 Forbidden`),
+  );
+  expect(requestedUrls).toEqual([firstPageUrl]);
+});
+
 test('GitHub client stops a pagination cycle before requesting the same page again', async () => {
   const { request, requestedUrls } = createRequestStub([
     {
