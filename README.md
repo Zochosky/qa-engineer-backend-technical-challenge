@@ -41,7 +41,7 @@ The client requests `state=open` with `per_page=100` and follows links whose `re
 
 Every page must return HTTP 200 and valid JSON. Zod validates a positive integer `id`, a `state` of `open` or `closed`, and a boolean `draft`. The test verifies that all returned PRs are open. The counting function includes only `state === 'open'` and `draft === false`.
 
-Invalid responses, repeated page URLs and duplicate IDs within or across pages stop the operation. Errors identify the page and URL; duplicates also identify the ID and both occurrences' pages. HTTP 403 and 429 errors include available rate-limit headers. Data is returned only after every page succeeds.
+Invalid responses, out-of-sequence page numbers and duplicate IDs within or across pages stop the operation. The client expects pages 1, 2, 3 and so on, regardless of whether the URL uses a repository name or ID. HTTP status and pagination errors identify the page and URL; duplicates also identify the PR ID. Network, JSON parsing and schema validation errors propagate directly from Playwright and Zod. HTTP errors report the status without rate-limit headers. Data is returned only after every page succeeds.
 
 ### Part 2
 
@@ -59,11 +59,11 @@ The tests call the real `getAllOpenPullRequests` function with a stubbed `get` m
 | Case | Expected result |
 | --- | --- |
 | Two pages, with a short first page and a draft on the second | Follow `rel="next"`, return both records including the draft, and stop when only `rel="prev"` remains |
-| First page succeeds; second returns HTTP 429 with `retry-after` | Reject with the page number, URL, status and retry header; make exactly two requests and return no partial result |
-| First page succeeds; second returns HTTP 403 with rate-limit headers | Reject with the page number, URL, status, available limit headers and readable reset time; make exactly two requests and return no partial result |
+| First page succeeds; second returns HTTP 429 with `retry-after` | Reject with the page number, URL and status; make exactly two requests and return no partial result |
+| First page succeeds; second returns HTTP 403 with rate-limit headers | Reject with the page number, URL and status; make exactly two requests and return no partial result |
 | First page returns HTTP 403 without rate-limit headers | Reject with the page number, URL and status, without adding rate-limit details; make exactly one request |
-| Page 1 points to page 2, which points back to page 1 | Reject the repeated URL before making a third request |
-| A PR ID from page 1 reappears on page 2 with a changed draft flag | Reject with the ID and both page numbers, even when the record contents differ; return no partial result |
+| Page 1 points to page 2, which points back to page 1 | Reject the unexpected page number before making a third request |
+| A PR ID from page 1 reappears on page 2 with a changed draft flag | Reject with the ID and current page number, even when the record contents differ; return no partial result |
 | The next page is marked with `rel="next last"` | Recognize `next` among the space-separated relations and return records from both pages |
 
 ## Middleware test coverage
@@ -100,7 +100,8 @@ Scheduled runs may be delayed. To pause the monitor, use Actions -> PR MONITOR -
 - Empty arrays are valid. The live test does not expect a fixed PR count.
 - Schemas cover fields needed by the rules and diagnostics, not the complete response contracts. Additional fields are accepted and omitted from parsed results; values are not normalized.
 - The Link parser supports GitHub's documented format, not every possible Link header variant.
+- Pagination assumes GitHub preserves the repository, filters and page size in its next links. The client checks the origin and page sequence, but does not verify repository identity or revalidate every query parameter.
 - GitHub data can change between requests. Pagination does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
 - The live count assertion checks consistency within the fetched dataset; it does not independently confirm the repository's total.
 - Live tests require internet access and can fail due to availability or rate limits. Each request has a 15-second timeout; tests use Playwright's default 30-second timeout. No automatic retries are configured.
-- Client unit tests cover two-page pagination, multiple link relations, a repeated page URL, a duplicate ID across pages and HTTP 403/429, including a 403 without rate-limit headers. URL normalization variants, same-page duplicates and invalid responses still lack dedicated tests. Middleware tests validate the local rules using fixtures, without calling a middleware service.
+- Client unit tests cover two-page pagination, multiple link relations, a repeated page URL, a duplicate ID across pages and HTTP 403/429, including a 403 without rate-limit headers. Alternative URL paths, same-page duplicates and invalid responses still lack dedicated tests. Middleware tests validate the local rules using fixtures, without calling a middleware service.

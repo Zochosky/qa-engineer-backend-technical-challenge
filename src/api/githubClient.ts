@@ -18,71 +18,30 @@ function getNextPage(linkHeader: string | undefined, context: string): string | 
   return nextPage;
 }
 
-function validateAndNormalizePageUrl(url: string, pageNumber: number): string {
-  let pageUrl: URL;
-  try {
-    pageUrl = new URL(url);
-  } catch (cause) {
-    throw new Error(`Page ${pageNumber}: invalid pagination URL: ${url}`, { cause });
-  }
-  if (pageUrl.origin !== 'https://api.github.com' || pageUrl.username || pageUrl.password) {
-    throw new Error(`Page ${pageNumber}: unexpected GitHub pagination URL: ${url}`);
-  }
-  // Parameter order and fragments must not let the same page bypass loop detection.
-  pageUrl.searchParams.sort();
-  pageUrl.hash = '';
-  return pageUrl.href;
-}
-
 async function fetchValidatedPage(
   request: Pick<APIRequestContext, 'get'>,
   url: string,
   pageNumber: number,
 ) {
   const context = `Page ${pageNumber}, GET ${url}`;
+  const token = process.env.GITHUB_API_TOKEN;
   const response = await request.get(url, {
     headers: {
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2026-03-10',
-      ...(process.env.GITHUB_API_TOKEN
-        ? { Authorization: `Bearer ${process.env.GITHUB_API_TOKEN}` }
-        : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     timeout: 15_000,
-  }).catch((cause: unknown) => {
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    throw new Error(`${context}: request failed: ${reason}`, { cause });
   });
+
   if (response.status() !== 200) {
-    const details: string[] = [];
-    // A 403 can also mean a permission error; report headers without assuming the cause.
-    if (response.status() === 403 || response.status() === 429) {
-      const headers = response.headers();
-      for (const name of ['x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'retry-after']) {
-        if (headers[name] !== undefined) details.push(`${name}=${headers[name]}`);
-      }
-      const reset = headers['x-ratelimit-reset'];
-      if (reset && /^\d+$/.test(reset)) {
-        const resetDate = new Date(Number(reset) * 1000);
-        if (Number.isFinite(resetDate.getTime())) details.push(`reset time=${resetDate.toISOString()}`);
-      }
-    }
     throw new Error(
-      `${context}: expected HTTP 200, received ${response.status()} ${response.statusText()}` +
-      (details.length ? `; ${details.join('; ')}` : ''),
+      `${context}: expected HTTP 200, received ${response.status()} ${response.statusText()}`,
     );
   }
 
-  const body: unknown = await response.json().catch((cause: unknown) => {
-    throw new Error(`${context}: response is not valid JSON`, { cause });
-  });
-  const validation = pullRequestsSchema.safeParse(body);
-  if (!validation.success) {
-    throw new Error(`${context}: invalid pull request response\n${validation.error.message}`);
-  }
-
   return {
-    pullRequests: validation.data,
+    pullRequests: pullRequestsSchema.parse(await response.json()),
     nextUrl: getNextPage(response.headers().link, context),
   };
 }
@@ -91,7 +50,7 @@ async function fetchValidatedPage(
  * Fetches pull requests with state=open, including drafts.
  * Follows rel="next" links to fetch and validate each page.
  * Stops with an error if a response or pagination URL is invalid,
- * a page is repeated, or a duplicate PR ID is found.
+ * pages are out of sequence, or a duplicate PR ID is found.
  * Returns the collected records only after all pages succeed.
  *
  * @example
@@ -104,34 +63,35 @@ export async function getAllOpenPullRequests(
 ): Promise<PullRequest[]> {
   let nextUrl: string | undefined =
     `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}/pulls?state=open&per_page=100&page=1`;
+
   const pullRequests: PullRequest[] = [];
-  const visitedPages = new Set<string>();
-  const firstPageById = new Map<number, number>();
-  let pageNumber = 0;
+  const seenIds = new Set<number>();
+  let pageNumber = 1;
 
   while (nextUrl) {
-    pageNumber++;
-    const url = validateAndNormalizePageUrl(nextUrl, pageNumber);
-    const context = `Page ${pageNumber}, GET ${url}`;
-    if (visitedPages.has(url)) throw new Error(`${context}: repeated pagination URL`);
-    visitedPages.add(url);
+    const pageUrl = new URL(nextUrl);
+    const context = `Page ${pageNumber}, GET ${nextUrl}`;
+    if (pageUrl.origin !== 'https://api.github.com' || pageUrl.username || pageUrl.password) {
+      throw new Error(`${context}: unexpected pagination URL`);
+    }
 
-    const page = await fetchValidatedPage(request, url, pageNumber);
+    // Expect pages 1, 2, 3... regardless of whether the path uses a repository name or ID.
+    const pages = pageUrl.searchParams.getAll('page');
+    if (pages.length !== 1 || pages[0] !== String(pageNumber)) {
+      throw new Error(`${context}: expected pagination page ${pageNumber}`);
+    }
 
+    const page = await fetchValidatedPage(request, nextUrl, pageNumber);
     for (const pullRequest of page.pullRequests) {
-      const firstPage = firstPageById.get(pullRequest.id);
-      // Silently removing duplicates could hide pagination drift and an incomplete dataset.
-      if (firstPage !== undefined) {
-        throw new Error(
-          `${context}: duplicate pull request ID ${pullRequest.id}; ` +
-          `first seen on page ${firstPage}, repeated on page ${pageNumber}`,
-        );
+      if (seenIds.has(pullRequest.id)) {
+        throw new Error(`${context}: duplicate pull request ID ${pullRequest.id}`);
       }
-      firstPageById.set(pullRequest.id, pageNumber);
+      seenIds.add(pullRequest.id);
       pullRequests.push(pullRequest);
     }
     // Only Link determines whether another page exists, not the number of records.
     nextUrl = page.nextUrl;
+    pageNumber++;
   }
 
   // Return only after every page succeeds; a partial list would produce a misleading count.
