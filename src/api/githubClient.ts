@@ -16,6 +16,22 @@ function getNextPage(linkHeader: string | undefined, context: string): string | 
   return nextPage;
 }
 
+function validateAndNormalizePageUrl(url: string, pageNumber: number): string {
+  let pageUrl: URL;
+  try {
+    pageUrl = new URL(url);
+  } catch (cause) {
+    throw new Error(`Page ${pageNumber}: invalid pagination URL: ${url}`, { cause });
+  }
+  if (pageUrl.origin !== 'https://api.github.com' || pageUrl.username || pageUrl.password) {
+    throw new Error(`Page ${pageNumber}: unexpected GitHub pagination URL: ${url}`);
+  }
+  // Parameter order and fragments must not let the same page bypass loop detection.
+  pageUrl.searchParams.sort();
+  pageUrl.hash = '';
+  return pageUrl.href;
+}
+
 async function fetchValidatedPage(
   request: Pick<APIRequestContext, 'get'>,
   url: string,
@@ -69,6 +85,16 @@ async function fetchValidatedPage(
   };
 }
 
+/**
+ * Fetches pull requests with state=open, including drafts.
+ * Follows rel="next" links to fetch and validate each page.
+ * Stops with an error if a response or pagination URL is invalid,
+ * a page is repeated, or a duplicate PR ID is found.
+ * Returns the collected records only after all pages succeed.
+ *
+ * @example
+ * const pullRequests = await getAllOpenPullRequests(request, 'appwrite', 'appwrite');
+ */
 export async function getAllOpenPullRequests(
   request: Pick<APIRequestContext, 'get'>,
   owner: string,
@@ -83,19 +109,7 @@ export async function getAllOpenPullRequests(
 
   while (nextUrl) {
     pageNumber++;
-    let pageUrl: URL;
-    try {
-      pageUrl = new URL(nextUrl);
-    } catch (cause) {
-      throw new Error(`Page ${pageNumber}: invalid pagination URL: ${nextUrl}`, { cause });
-    }
-    if (pageUrl.origin !== 'https://api.github.com' || pageUrl.username || pageUrl.password) {
-      throw new Error(`Page ${pageNumber}: unexpected GitHub pagination URL: ${nextUrl}`);
-    }
-    // Parameter order and fragments must not let the same page bypass loop detection.
-    pageUrl.searchParams.sort();
-    pageUrl.hash = '';
-    const url = pageUrl.href;
+    const url = validateAndNormalizePageUrl(nextUrl, pageNumber);
     const context = `Page ${pageNumber}, GET ${url}`;
     if (visitedPages.has(url)) throw new Error(`${context}: repeated pagination URL`);
     visitedPages.add(url);

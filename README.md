@@ -1,6 +1,6 @@
 # QA Engineer Backend Technical Challenge
 
-- **Part 1:** One live integration test fetches all pages of open PRs from `appwrite/appwrite`, validates the response fields and counts non-draft PRs.
+- **Part 1:** One live integration test fetches all pages of open PRs from `appwrite/appwrite`, validates the response fields and counts non-draft PRs. Four client unit tests cover pagination, repeated page URLs, duplicate PR IDs across pages and HTTP 429 using controlled HTTP stubs.
 - **Part 2:** Seven unit tests validate the supplied middleware response and variations of it against the two business rules.
 
 ## Setup
@@ -15,7 +15,8 @@ npm ci
 | --- | --- |
 | `npm run typecheck` | Check TypeScript types |
 | `npm test` | Run all tests, including live GitHub API requests |
-| `npm test -- tests/unit` | Run Part 2 without external API calls |
+| `npm test -- tests/unit` | Run all unit tests without external API calls |
+| `npm test -- tests/unit/githubClient.spec.ts` | Run the GitHub client unit tests |
 | `npm test -- tests/integration` | Run Part 1 against current GitHub data |
 | `npm run report` | Open the latest HTML report |
 
@@ -29,6 +30,7 @@ Playwright provides HTTP requests and one test runner with shared reporting for 
 - `src/schemas/`: Fields required by the GitHub and middleware validation rules.
 - `src/domain/`: PR counting and middleware rules as pure functions, independent of HTTP and reporting.
 - `tests/integration/` and `tests/unit/`: Scenarios and assertions. `tests/fixtures/` contains the middleware example from the challenge.
+- `tests/helpers/`: HTTP response stubs for unit tests and per-page report steps for the live test.
 - `reporters/`: GitHub Actions count summary, generated after tests finish.
 
 ## Pagination and business rules
@@ -49,6 +51,17 @@ After schema validation, the middleware function checks:
 - A PR with the `high-priority` label has `is_draft === false`.
 
 The count covers the entire array, including drafts. Part 1 filtering is not applied. The first violation throws an error with declared and actual counts or the offending PR ID.
+
+## GitHub client unit test coverage
+
+The tests call the real `getAllOpenPullRequests` function with a stubbed `get` method. Each test supplies its own responses and checks the requested URLs; no network requests are made.
+
+| Case | Expected result |
+| --- | --- |
+| Two pages, with a short first page and a draft on the second | Follow `rel="next"`, return both records including the draft, and stop when only `rel="prev"` remains |
+| First page succeeds; second returns HTTP 429 with `retry-after` | Reject with the page number, URL, status and retry header; make exactly two requests and return no partial result |
+| Page 1 points to page 2, which points back to page 1 | Reject the repeated URL before making a third request |
+| A PR ID from page 1 reappears on page 2 with a changed draft flag | Reject with the ID and both page numbers, even when the record contents differ; return no partial result |
 
 ## Middleware test coverage
 
@@ -71,7 +84,7 @@ Negative cases pass only when the validator throws the expected error message. T
 | Workflow | Trigger | Tests |
 | --- | --- | --- |
 | [PR MONITOR](.github/workflows/github-api.yml) | Hourly at minute 17 UTC on the default branch; manual runs | Live GitHub integration |
-| [UNIT TESTS](.github/workflows/unit-tests.yml) | Push to `main`, PR targeting `main`, manual runs | Middleware unit tests |
+| [UNIT TESTS](.github/workflows/unit-tests.yml) | Push to `main`, PR targeting `main`, manual runs | GitHub client and middleware unit tests |
 
 Both workflows check types and retain generated HTML reports for 7 days, including after test failures. Cancelled runs skip the report upload. Artifacts are named `playwright-report` and `unit-test-report`, respectively.
 
@@ -86,5 +99,5 @@ Scheduled runs may be delayed. To pause the monitor, use Actions -> PR MONITOR -
 - The Link parser supports GitHub's documented format, not every possible Link header variant.
 - GitHub data can change between requests. Pagination does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
 - The live count assertion checks consistency within the fetched dataset; it does not independently confirm the repository's total.
-- Live tests require internet access and can fail due to availability or rate limits. Each request has a 15-second timeout and the live test a 120-second timeout. No automatic retries are configured.
-- The live test does not reproducibly exercise every API error-handling branch. Middleware tests validate the local rules using fixtures, without calling a middleware service.
+- Live tests require internet access and can fail due to availability or rate limits. Each request has a 15-second timeout; tests use Playwright's default 30-second timeout. No automatic retries are configured.
+- Client unit tests cover two-page pagination, a repeated page URL, a duplicate ID across pages and HTTP 429. URL normalization variants, same-page duplicates, invalid responses and HTTP 403 still lack dedicated tests. Middleware tests validate the local rules using fixtures, without calling a middleware service.
