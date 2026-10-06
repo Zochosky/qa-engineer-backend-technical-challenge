@@ -8,7 +8,9 @@ function getNextPage(linkHeader: string | undefined, context: string): string | 
     const match = link.trim().match(/^<([^>]+)>;\s*rel="([^"]+)"$/);
     // A malformed header must not be mistaken for the end of the dataset.
     if (!match) throw new Error(`${context}: invalid GitHub Link header: ${linkHeader}`);
-    if (match[2] === 'next') {
+    // A link can identify the same page as both next and last.
+    const relations = match[2]?.split(/\s+/) ?? [];
+    if (relations.includes('next')) {
       if (nextPage) throw new Error(`${context}: multiple next links in GitHub Link header`);
       nextPage = match[1];
     }

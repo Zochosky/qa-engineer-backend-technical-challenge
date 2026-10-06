@@ -1,6 +1,6 @@
 # QA Engineer Backend Technical Challenge
 
-- **Part 1:** One live integration test fetches all pages of open PRs from `appwrite/appwrite`, validates the response fields and counts non-draft PRs. Four client unit tests cover pagination, repeated page URLs, duplicate PR IDs across pages and HTTP 429 using controlled HTTP stubs.
+- **Part 1:** One live integration test fetches all pages of open PRs from `appwrite/appwrite`, validates the response fields and counts non-draft PRs. Five client unit tests cover pagination, multiple link relations, repeated page URLs, duplicate PR IDs across pages and HTTP 429 using controlled HTTP stubs.
 - **Part 2:** Seven unit tests validate the supplied middleware response and variations of it against the two business rules.
 
 ## Setup
@@ -37,7 +37,7 @@ Playwright provides HTTP requests and one test runner with shared reporting for 
 
 ### Part 1
 
-The client requests `state=open` with `per_page=100` and follows `rel="next"` in GitHub's `Link` header until it is absent. Only the header determines whether another page exists.
+The client requests `state=open` with `per_page=100` and follows links whose `rel` value includes `next`, including `rel="next last"`. Only the `Link` header determines whether another page exists.
 
 Every page must return HTTP 200 and valid JSON. Zod validates a positive integer `id`, a `state` of `open` or `closed`, and a boolean `draft`. The test verifies that all returned PRs are open. The counting function includes only `state === 'open'` and `draft === false`.
 
@@ -62,6 +62,7 @@ The tests call the real `getAllOpenPullRequests` function with a stubbed `get` m
 | First page succeeds; second returns HTTP 429 with `retry-after` | Reject with the page number, URL, status and retry header; make exactly two requests and return no partial result |
 | Page 1 points to page 2, which points back to page 1 | Reject the repeated URL before making a third request |
 | A PR ID from page 1 reappears on page 2 with a changed draft flag | Reject with the ID and both page numbers, even when the record contents differ; return no partial result |
+| The next page is marked with `rel="next last"` | Recognize `next` among the space-separated relations and return records from both pages |
 
 ## Middleware test coverage
 
@@ -100,4 +101,4 @@ Scheduled runs may be delayed. To pause the monitor, use Actions -> PR MONITOR -
 - GitHub data can change between requests. Pagination does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
 - The live count assertion checks consistency within the fetched dataset; it does not independently confirm the repository's total.
 - Live tests require internet access and can fail due to availability or rate limits. Each request has a 15-second timeout; tests use Playwright's default 30-second timeout. No automatic retries are configured.
-- Client unit tests cover two-page pagination, a repeated page URL, a duplicate ID across pages and HTTP 429. URL normalization variants, same-page duplicates, invalid responses and HTTP 403 still lack dedicated tests. Middleware tests validate the local rules using fixtures, without calling a middleware service.
+- Client unit tests cover two-page pagination, multiple link relations, a repeated page URL, a duplicate ID across pages and HTTP 429. URL normalization variants, same-page duplicates, invalid responses and HTTP 403 still lack dedicated tests. Middleware tests validate the local rules using fixtures, without calling a middleware service.

@@ -87,3 +87,22 @@ test('GitHub client rejects a repeated PR ID across pages even when its fields c
   );
   expect(requestedUrls).toEqual([firstPageUrl, secondPageUrl]);
 });
+
+test('GitHub client follows next when a Link has multiple relation types', async () => {
+  const firstPullRequest = { id: 101, state: 'open', draft: false };
+  const secondPullRequest = { id: 102, state: 'open', draft: false };
+  const { request, requestedUrls } = createRequestStub([
+    {
+      body: [firstPullRequest],
+      headers: { link: `<${secondPageUrl}>; rel="next last"` },
+    },
+    {
+      body: [secondPullRequest],
+    },
+  ]);
+
+  const pullRequests = await getAllOpenPullRequests(request, 'appwrite', 'appwrite');
+
+  expect(pullRequests).toEqual([firstPullRequest, secondPullRequest]);
+  expect(requestedUrls).toEqual([firstPageUrl, secondPageUrl]);
+});
