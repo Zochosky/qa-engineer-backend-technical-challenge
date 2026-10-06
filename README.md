@@ -1,6 +1,6 @@
 # QA Engineer Backend Technical Challenge
 
-- **Part 1:** One live integration test fetches all pages of open PRs from `appwrite/appwrite`, validates the response fields and counts non-draft PRs. Seven client unit tests cover pagination, multiple link relations, repeated page URLs, duplicate PR IDs across pages and HTTP 403/429 using controlled HTTP stubs.
+- **Part 1:** One live integration test fetches all pages of open PRs from `appwrite/appwrite`, validates the response fields and counts non-draft PRs. Seven client unit tests cover pagination, multiple link relations, pagination cycles, duplicate PR IDs across pages and HTTP 403/429 using controlled HTTP stubs.
 - **Part 2:** Seven unit tests validate the supplied middleware response and variations of it against the two business rules.
 
 ## Setup
@@ -41,7 +41,7 @@ The client requests `state=open` with `per_page=100` and follows links whose `re
 
 Every page must return HTTP 200 and valid JSON. Zod validates a positive integer `id`, a `state` of `open` or `closed`, and a boolean `draft`. The test verifies that all returned PRs are open. The counting function includes only `state === 'open'` and `draft === false`.
 
-Invalid responses, out-of-sequence page numbers and duplicate IDs within or across pages stop the operation. The client expects pages 1, 2, 3 and so on, regardless of whether the URL uses a repository name or ID. HTTP status and pagination errors identify the page and URL; duplicates also identify the PR ID. Network, JSON parsing and schema validation errors propagate directly from Playwright and Zod. HTTP errors report the status without rate-limit headers. Data is returned only after every page succeeds.
+Invalid responses, out-of-sequence page numbers and duplicate IDs within or across pages stop the operation. The client expects pages 1, 2, 3 and so on, regardless of whether the URL uses a repository name or ID. Errors from the client's HTTP status and pagination checks include the page and URL; duplicates also identify the PR ID. URL parsing, network, JSON parsing and schema validation errors propagate without additional client context. HTTP errors report the status without rate-limit headers. Data is returned only after every page succeeds.
 
 ### Part 2
 
@@ -104,4 +104,4 @@ Scheduled runs may be delayed. To pause the monitor, use Actions -> PR MONITOR -
 - GitHub data can change between requests. Pagination does not provide an atomic snapshot, and duplicate detection cannot reveal every omission caused by concurrent changes.
 - The live count assertion checks consistency within the fetched dataset; it does not independently confirm the repository's total.
 - Live tests require internet access and can fail due to availability or rate limits. Each request has a 15-second timeout; tests use Playwright's default 30-second timeout. No automatic retries are configured.
-- Client unit tests cover two-page pagination, multiple link relations, a repeated page URL, a duplicate ID across pages and HTTP 403/429, including a 403 without rate-limit headers. Alternative URL paths, same-page duplicates and invalid responses still lack dedicated tests. Middleware tests validate the local rules using fixtures, without calling a middleware service.
+- Client unit tests cover two-page pagination, multiple link relations, a pagination cycle, a duplicate ID across pages and HTTP 403/429, including a 403 without rate-limit headers. Alternative URL paths, same-page duplicates and invalid responses still lack dedicated tests. Middleware tests validate the local rules using fixtures, without calling a middleware service.
