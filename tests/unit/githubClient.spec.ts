@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { getAllOpenPullRequests } from '../../src/api/githubClient';
 import { createRequestStub } from '../helpers/requestStub';
 
+// Only HTTP responses are stubbed; the real client's pagination, validation and error handling run here.
 const firstPageUrl = 'https://api.github.com/repos/appwrite/appwrite/pulls?page=1&per_page=100&state=open';
 const secondPageUrl = 'https://api.github.com/repos/appwrite/appwrite/pulls?page=2&per_page=100&state=open';
 
@@ -61,6 +62,7 @@ test('GitHub client rejects page two with HTTP 403 and reports rate-limit detail
       headers: {
         'x-ratelimit-limit': '60',
         'x-ratelimit-remaining': '0',
+        // A fixed timestamp makes the reset-time diagnostic independent of the current clock.
         'x-ratelimit-reset': '1700000000',
       },
     },
@@ -137,6 +139,7 @@ test('GitHub client follows next when a Link has multiple relation types', async
   const { request, requestedUrls } = createRequestStub([
     {
       body: [firstPullRequest],
+      // Regression: matching the entire rel value previously stopped pagination at this link.
       headers: { link: `<${secondPageUrl}>; rel="next last"` },
     },
     {
