@@ -18,16 +18,36 @@ test('Count open non-draft pull requests across all GitHub pages', { tag: '@gith
     ).toEqual([]);
   });
 
-  const count = countOpenNonDraftPullRequests(pullRequests);
-  const draftCount = pullRequests.filter((pullRequest) => pullRequest.draft).length;
-  const summary = `Count open non-draft PRs: ${count} (${pullRequests.length} fetched, ${draftCount} drafts)`;
+  // 1. Calculate the result using the business function.
+  const nonDraftCount = countOpenNonDraftPullRequests(pullRequests);
+
+  // 2. Calculate the expected count from the verified open PRs.
+  const fetchedCount = pullRequests.length;
+  const draftPullRequests = pullRequests.filter((pr) => pr.draft);
+  const draftCount = draftPullRequests.length;
+  const expectedNonDraftCount = fetchedCount - draftCount;
+
+  // 3. Verify the result and show the counts in the report.
+  const summary =
+    `Count open non-draft PRs: ${nonDraftCount} ` +
+    `(${fetchedCount} fetched, ${draftCount} drafts)`;
+
   await test.step(summary, async () => {
-    expect(count, 'The total must exclude every draft pull request')
-      .toBe(pullRequests.length - draftCount);
+    expect(
+      nonDraftCount,
+      'The total must exclude every draft pull request',
+    ).toBe(expectedNonDraftCount);
   });
+
+  // 4. Pass structured counters to the GitHub Actions reporter.
+  const counts = {
+    fetched: fetchedCount,
+    drafts: draftCount,
+    nonDrafts: nonDraftCount,
+  };
 
   testInfo.annotations.push({
     type: '_pr-counts',
-    description: JSON.stringify({ fetched: pullRequests.length, drafts: draftCount, nonDrafts: count }),
+    description: JSON.stringify(counts),
   });
 });
