@@ -71,7 +71,7 @@ export async function getAllOpenPullRequests(
   while (nextUrl) {
     const pageUrl = new URL(nextUrl);
     const context = `Page ${pageNumber}, GET ${nextUrl}`;
-    if (pageUrl.origin !== 'https://api.github.com' || pageUrl.username || pageUrl.password) {
+    if (pageUrl.origin !== 'https://api.github.com') {
       throw new Error(`${context}: unexpected pagination URL`);
     }
 
