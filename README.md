@@ -18,9 +18,12 @@ npm ci
 | `npm test -- tests/unit` | Run all unit tests without external API calls |
 | `npm test -- tests/unit/githubClient.spec.ts` | Run the GitHub client unit tests |
 | `npm test -- tests/integration` | Run Part 1 against current GitHub data |
+| `npm test -- tests/integration/github.spec.ts --trace on` | Run the live integration test with trace recording |
 | `npm run report` | Open the latest HTML report |
 
 No browser installation is needed. Live API requests are unauthenticated unless `GITHUB_API_TOKEN` is set.
+
+After a run with `--trace on`, use `npm run report`, select the test and open its trace to inspect steps and API requests.
 
 ## Architecture
 
