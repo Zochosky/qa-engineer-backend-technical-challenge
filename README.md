@@ -89,14 +89,14 @@ Negative cases pass only when the validator throws the expected error message. T
 
 | Workflow | Trigger | Tests |
 | --- | --- | --- |
-| [PR MONITOR](.github/workflows/github-api.yml) | Hourly at minute 17 UTC on the default branch; manual runs | Live GitHub integration |
+| [PR MONITOR](.github/workflows/github-api.yml) | Manual runs only; hourly schedule commented out | Live GitHub integration |
 | [UNIT TESTS](.github/workflows/unit-tests.yml) | Push to `main`, PR targeting `main`, manual runs | GitHub client and middleware unit tests |
 
 Both workflows check types and retain generated HTML reports for 7 days, including after test failures. Cancelled runs skip the report upload. Artifacts are named `playwright-report` and `unit-test-report`, respectively.
 
 The live workflow uses GitHub's automatic token and shows open, draft and non-draft counts in the run summary after a successful run. Results are not compared between runs. Locally, `npm run report` opens the generated `playwright-report/`, which is ignored by Git.
 
-Scheduled runs may be delayed. To pause the monitor, use Actions -> PR MONITOR -> workflow options -> Disable workflow. The unit job has a 5-minute timeout and cancels superseded runs for the same branch or PR.
+Scheduled runs are paused in the workflow file. To restore them, uncomment the `schedule` block and enable the workflow in Actions -> PR MONITOR if it is disabled. The unit job has a 5-minute timeout and cancels superseded runs for the same branch or PR.
 
 ## Assumptions and limitations
 

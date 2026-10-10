@@ -2,9 +2,9 @@ name: PR MONITOR
 
 on:
   workflow_dispatch:
-  schedule:
-    # Run hourly, away from the busier start of the hour on GitHub Actions.
-    - cron: '17 * * * *'
+  # Scheduled runs are paused. Uncomment this block to restore hourly runs.
+  # schedule:
+  #   - cron: '17 * * * *'
 
 permissions:
   contents: read
